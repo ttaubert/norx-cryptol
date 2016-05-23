@@ -1,4 +1,4 @@
-/**
+/*
  * NORX 2.0 Cryptol implementation by Tim Taubert <tim@timtaubert.de>.
  *
  * The specification can be found at <https://norx.io/data/norx.pdf>.
@@ -11,85 +11,222 @@
  * this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
  */
 
-F : [6] -> [16][32] -> [16][32]
-F l s = xs @ l
-    where xs = [s] # [ qround x | x <- xs ]
+module NORX where
 
-G s = G_sub (G_sub s 8 11) 16 31 // different rotations for 64-bit (?)
+/* -------------------------------------------------------------------------- */
+/* -- Configuration --------------------------------------------------------- */
 
-G_sub : [4][32] -> [6] -> [6] -> [4][32]
-G_sub [a, b, c, d] r0 r1 = [a', b', c', d']
-    where H x y = (x ^ y) ^ ((x && y) << 1)
-          a' = H a b
-          d' = (a' ^ d) >>> r0
-          c' = H c d'
-          b' = (b ^ c') >>> r1
+// Pick a word size.
+import NORX32Impl as NORXImpl
+//import NORX64Impl as NORXImpl
 
-qround [s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15] =
-       [u0, u1, u2, u3, u4, u5, u6, u7, u8, u9, u10, u11, u12, u13, u14, u15]
-    where
-        // column step
-        [t0, t4, t8,  t12] = G [s0, s4, s8,  s12]
-        [t1, t5, t9,  t13] = G [s1, s5, s9,  s13]
-        [t2, t6, t10, t14] = G [s2, s6, s10, s14]
-        [t3, t7, t11, t15] = G [s3, s7, s11, s15]
-        // diagonal step
-        [u0, u5, u10, u15] = G [t0, t5, t10, t15]
-        [u1, u6, u11, u12] = G [t1, t6, t11, t12]
-        [u2, u7, u8,  u13] = G [t2, t7, t8,  t13]
-        [u3, u4, u9,  u14] = G [t3, t4, t9,  t14]
 
-/**
- * Test Vectors [A.1]
- */
-property p_a1 = F 2 [0..15] == [0x0454edab, 0xac6851cc, 0xb707322f, 0xa0c7c90d,
-                                0x99ab09ac, 0xa643466d, 0x21c22362, 0x1230c950,
-                                0xa3d8d930, 0x3fa8b72c, 0xed84eb49, 0xedca4787,
-                                0x335463eb, 0xf994220b, 0xbe0bf5c9, 0xd7c49104]
+/* -------------------------------------------------------------------------- */
+/* -- Public API ------------------------------------------------------------ */
 
-/**
- * Test Vectors [A.2]
- */
-K = [0..15] : [16][8]
-N = [ x << 4 | x <- reverse ([8..15] : [8][8]) ]
-A = [0..127] : [128][8]
-M = [0..127] : [128][8]
-Z = [0..127] : [128][8]
+// 4-round NORX with p=1.
+NORX4_Encrypt = NORX encrypt 4
+NORX4_Decrypt = NORX decrypt 4
 
-// TODO define type for state ?
+// 6-round NORX with p=1.
+NORX6_Encrypt = NORX encrypt 6
+NORX6_Decrypt = NORX decrypt 6
 
-// TODO ???
-words_le x = [ join (reverse y) | y <- split x ]
+private
+  NORX f l k n a m z = (ct, tag)
+      where (st, ct) = f l (absorb l (initialise l k n) a DomHeader) m
+            (_, tag) = finalise l (absorb l st z DomTrailer)
 
-initialise : [6] -> [16][8] -> [8][8] -> [16][32]
-initialise l k n = F l [n0, n1, u2, u3, k0, k1, k2, k3, u8, u9, u10, u11, u12 ^ 32, u13 ^ 4, u14 ^ 1, u15 ^ 128]
-    where [u0, u1, u2, u3, u4, u5, u6, u7, u8, u9, u10, u11, u12, u13, u14, u15] = F 2 [0..15]
-          [k0, k1, k2, k3] = words_le k
-          [n0, n1] = words_le n
 
-/* Multi-rate padding. */
-pad : {n, floor} (fin n, floor == n / 48) => [n][8] -> [n + 48 - n % 48][8]
-pad x = groupBy (take padded)
-    where padded : [48 * (floor + 1) * 8]
-          padded = (join x) # ((0x01 # zero) ^ (zero # 0x80))
+/* -------------------------------------------------------------------------- */
+/* -- Implementation -------------------------------------------------------- */
 
-/* Absorb additional data. */
-absorb : {n} (fin n) => [16][32] -> [6] -> [n][8] -> [32] -> [16][32]
-absorb s l x v = ys ! 0
-    where ys = [s] # [ step y b | b <- groupBy`{48} (pad x) | y <- ys ]
-          step st b = (F l (tag st)) ^ words_le (b # zero)
-          tag st = (take`{15} st) # [(st ! 0) ^ v]
+private
+  type Nw = NORXImpl::Nw
+  type Nr = Nw * 12
+  type Nrb = Nr / 8
+  type Np = 1
 
-// [NORX32-4-1] State after initialisation.
-property p_a2_1 = initialise 4 K N ==
-    [0x2a878673, 0xee1c2b8c, 0x94e41462, 0xe6f99787,
-     0x1b90ce6a, 0xa18cd777, 0xda58c1a7, 0x44a3bc15,
-     0x91d3a9ec, 0x235bbce1, 0x97c2fdf8, 0x329735f2,
-     0x4ceefccc, 0x8737252b, 0xd73b823b, 0x4f53b645]
+  type State = [16][Nw]
+  type Key = [Nw / 2][8]
+  type Nonce = [Nw / 4][8]
+  type Tag = [Nw / 2][8]
+  type Block = [Nr / Nw][Nw]
 
-// [NORX32-4-1] State after header processing.
-property p_a2_2 = absorb (initialise 4 K N) 4 A 0x00000001 ==
-    [0xc59fd03e, 0x5785b42b, 0xb6cbf54c, 0x90004eda,
-     0xbb7d6d72, 0xf9989dc6, 0xe2a06d50, 0x43a2c3af,
-     0xfdaae2f5, 0xfe32e309, 0x5221792a, 0xd9f96eab,
-     0x0c55eec7, 0xf3ef5fac, 0xe7fa58e1, 0x22fd6d9c]
+  DomHeader    =  1
+  DomPayload   =  2
+  DomTrailer   =  4
+  DomTag       =  8
+
+  // Convert bytes to LE integers.
+  to_le : {n} (fin n, (n * 8) % Nw == 0) => [n][8] -> [n * 8 / Nw][Nw]
+  to_le x = [ join (reverse y) | y <- groupBy`{Nw / 8} x ]
+
+  // Convert LE integers to bytes.
+  from_le : {n} (fin n) => [n][Nw] -> [n * Nw / 8][8]
+  from_le x = join [ reverse (groupBy`{8} y) | y <- x ]
+
+  // Tag a given state.
+  tag_state : State -> [Nw] -> State
+  tag_state s v = zero # [v] ^ s
+
+  // l-round permutation.
+  F : [Nw] -> State -> State
+  F l s = xs @ l where xs = [s] # [ round x | x <- xs ]
+
+  // Inspired by the core of the ChaCha20 algorithm.
+  round [s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15] =
+        [u0, u1, u2, u3, u4, u5, u6, u7, u8, u9, u10, u11, u12, u13, u14, u15]
+      where
+          // Column step.
+          [t0, t4, t8,  t12] = G [s0, s4, s8,  s12]
+          [t1, t5, t9,  t13] = G [s1, s5, s9,  s13]
+          [t2, t6, t10, t14] = G [s2, s6, s10, s14]
+          [t3, t7, t11, t15] = G [s3, s7, s11, s15]
+          // Diagonal step.
+          [u0, u5, u10, u15] = G [t0, t5, t10, t15]
+          [u1, u6, u11, u12] = G [t1, t6, t11, t12]
+          [u2, u7, u8,  u13] = G [t2, t7, t8,  t13]
+          [u3, u4, u9,  u14] = G [t3, t4, t9,  t14]
+
+  // Inspired by ChaCha20's quarter round.
+  G [a, b, c, d] = [a'', b'', c'', d'']
+      where H x y = (x ^ y) ^ ((x && y) << 1)
+            a' = H a b
+            d' = (a' ^ d) >>> NORXImpl::rot.0
+            c' = H c d'
+            b' = (b ^ c') >>> NORXImpl::rot.1
+            a'' = H a' b'
+            d'' = (a'' ^ d') >>> NORXImpl::rot.2
+            c'' = H c' d''
+            b'' = (b' ^ c'') >>> NORXImpl::rot.3
+
+  // Initialise the internal state.
+  initialise : [Nw] -> Key -> Nonce -> State
+  initialise l k n = F l (ns # [u2, u3] # ks # [u8, u9, u10, u11] # ps)
+      where [u0, u1,  u2,  u3,  u4,  u5,  u6,  u7,
+             u8, u9, u10, u11, u12, u13, u14, u15] = F 2 [0..15]
+            ps = [u12 ^ `Nw, u13 ^ l, u14 ^ `Np, u15 ^ (`Nw * 4)]
+            ns = to_le n
+            ks = to_le k
+
+  // Multi-rate padding.
+  pad : {n, np}
+      ( np == Nr - (n * 8) % Nr // number of padding bits
+      ) => [n][8] -> [np % Nr / 8][8]
+  pad x = groupBy`{8} (take (postfix : [np]))
+       where postfix = 0x01 # zero ^ (zero # 0x80)
+
+  // Base absorption function.
+  absorb_data : {n,num}
+              ( // number of states + blocks returned
+                num == (n / Nrb) + min 1 (n % Nrb)
+              ) => [Nw] -> State -> [n][8] -> [Nw] -> (State -> Block -> State)
+                -> [num](State, Block)
+  absorb_data l s x v f = drop`{1} ys
+      where blocks = groupBy (x # (pad x))
+            ys = [(s, zero)] # [ next y (to_le b) | b <- blocks | (y,_) <- ys ]
+            next y b = (f st b, take st ^ b)
+                where st = F l (tag_state y v)
+
+  // Absorb additional data.
+  absorb l s x v = state
+      where (state, block) = (absorb_data l s x v f) ! 0
+            f st bl = st ^ (bl # zero)
+
+  // Encrypt message.
+  encrypt : {n} (fin n) => [Nw] -> State -> [n][8] -> (State, [n][8])
+  encrypt l s x = (abs.0 ! 0, take ciphertext)
+      where abs = absorb_data l s x DomPayload f
+            ciphertext = from_le (join abs.1)
+            f st bl = st ^ (bl # zero)
+
+  // Decrypt message.
+  decrypt : {n} (fin n) => [Nw] -> State -> [n][8] -> (State, [n][8])
+  decrypt l s x = (state', take plaintext)
+      where abs = absorb_data l s x DomPayload f
+            plaintext = from_le (join abs.1)
+            f st bl = bl # (drop st)
+            // Fix the state returned by decrypt() so that the padding
+            // (if any) is properly XOR'ed with the last state Sj.
+            state' = (to_le mask ^ block) # (drop state)
+            mask = (take`{n % Nrb} sj # zero) : [Nrb][8]
+            sj = from_le (take state ^ block)
+            (state, block) = abs ! 0
+
+  // Finalise.
+  finalise : [Nw] -> State -> (State, Tag)
+  finalise l s = (st, from_le (take st))
+      where st = F (2 * l) (tag_state s DomTag)
+
+
+/* -------------------------------------------------------------------------- */
+/* -- Tests ----------------------------------------------------------------- */
+
+private
+  tests = NORXImpl::tests
+
+  // Test Vectors [A.1]
+  property p_a1 = F 2 [0..15] == tests.vec_init_const
+
+  // Test Vectors [A.2]
+  K = [0..(Nw/2-1)]
+  N = [ x << 4 | x <- reverse [(16-Nw/4)..15] ]
+  A = [0..127]
+  M = [0..127]
+  Z = [0..127]
+
+  // Test Values (4 rounds).
+  t_init = initialise 4 K N
+  t_header = absorb 4 t_init A DomHeader
+  (t_encrypt, t_ciphertext) = encrypt 4 t_header M
+  t_trailer = absorb 4 t_encrypt Z DomTrailer
+  (t_final, t_tag) = finalise 4 t_trailer
+  t_decrypt = decrypt 4 t_header t_ciphertext
+
+  // Test Values (6 rounds).
+  t_init' = initialise 6 K N
+  t_header' = absorb 6 t_init' A DomHeader
+  (t_encrypt', t_ciphertext') = encrypt 6 t_header' M
+  t_trailer' = absorb 6 t_encrypt' Z DomTrailer
+  (t_final', t_tag') = finalise 6 t_trailer'
+  t_decrypt' = decrypt 6 t_header' t_ciphertext'
+
+  // State after initialisation.
+  property p_a2_1_4 = t_init == tests.vec_init4
+  property p_a2_1_6 = t_init' == tests.vec_init6
+
+  // State after header processing.
+  property p_a2_2_4 = t_header == tests.vec_header4
+  property p_a2_2_6 = t_header' == tests.vec_header6
+
+  // State after message encryption.
+  property p_a2_3_4 = t_encrypt == tests.vec_encryption4
+  property p_a2_3_6 = t_encrypt' == tests.vec_encryption6
+
+  // State after trailer processing.
+  property p_a2_4_4 = t_trailer == tests.vec_trailer4
+  property p_a2_4_6 = t_trailer' == tests.vec_trailer6
+
+  // State after finalisation.
+  property p_a2_5_4 = t_final == tests.vec_final4
+  property p_a2_5_6 = t_final' == tests.vec_final6
+
+  // Ciphertext.
+  property p_a2_6_4 = t_ciphertext == tests.vec_ciphertext4
+  property p_a2_6_6 = t_ciphertext' == tests.vec_ciphertext6
+
+  // Authentication tag.
+  property p_a2_7_4 = t_tag == tests.vec_tag4
+  property p_a2_7_6 = t_tag' == tests.vec_tag6
+
+  // Decryption.
+  property p_a2_8_4 = (t_encrypt, M) == t_decrypt
+  property p_a2_8_6 = (t_encrypt', M) == t_decrypt'
+
+  // Public API.
+  property p_a2_9_4 = NORX4_Encrypt K N A M Z == (tests.vec_ciphertext4, tests.vec_tag4)
+  property p_a2_9_6 = NORX6_Encrypt K N A M Z == (tests.vec_ciphertext6, tests.vec_tag6)
+
+  property p_a2_10_4 = NORX4_Decrypt K N A tests.vec_ciphertext4 Z == (M, tests.vec_tag4)
+  property p_a2_10_6 = NORX6_Decrypt K N A tests.vec_ciphertext6 Z == (M, tests.vec_tag6)
