@@ -113,14 +113,14 @@ private
   // Multi-rate padding.
   pad : {n, np}
       ( np == Nr - (n * 8) % Nr // number of padding bits
-      ) => [n][8] -> [np % Nr / 8][8]
-  pad x = groupBy`{8} (take (postfix : [np]))
+      ) => [n][8] -> [np / 8][8]
+  pad x = groupBy`{8} (postfix : [np])
        where postfix = 0x01 # zero ^ (zero # 0x80)
 
   // Base absorption function.
-  absorb_data : {n,num}
+  absorb_data : {n, num}
               ( // number of states + blocks returned
-                num == (n / Nrb) + min 1 (n % Nrb)
+                num == n / Nrb + 1
               ) => [Nw] -> State -> [n][8] -> [Nw] -> (State -> Block -> State)
                 -> [num](State, Block)
   absorb_data l s x v f = drop`{1} ys
