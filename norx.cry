@@ -41,6 +41,45 @@ private
 /* -------------------------------------------------------------------------- */
 /* -- Implementation -------------------------------------------------------- */
 
+// Initialise the internal state.
+initialise : [Nw] -> Key -> Nonce -> State
+initialise l k n = F l (ns # [u2, u3] # ks # [u8, u9, u10, u11] # ps)
+    where [u0, u1,  u2,  u3,  u4,  u5,  u6,  u7,
+           u8, u9, u10, u11, u12, u13, u14, u15] = F 2 [0..15]
+          ps = [u12 ^ `Nw, u13 ^ l, u14 ^ `Np, u15 ^ (`Nw * 4)]
+          ns = to_le n
+          ks = to_le k
+
+// Absorb additional data.
+absorb l s x v = state
+    where (state, block) = (absorb_data l s x v f) ! 0
+          f st bl = st ^ (bl # zero)
+
+// Encrypt message.
+encrypt : {n} (fin n) => [Nw] -> State -> [n][8] -> (State, [n][8])
+encrypt l s x = ((abs ! 0).0, take ciphertext)
+    where ciphertext = from_le (join [ y.1 | y <- abs ])
+          abs = absorb_data l s x DomPayload f
+          f st bl = st ^ (bl # zero)
+
+// Decrypt message.
+decrypt : {n} (fin n) => [Nw] -> State -> [n][8] -> (State, [n][8])
+decrypt l s x = (state', take plaintext)
+    where plaintext = from_le (join [ y.1 | y <- abs ])
+          abs = absorb_data l s x DomPayload f
+          f st bl = bl # (drop st)
+          // Fix the state returned by decrypt() so that the padding
+          // (if any) is properly XOR'ed with the last state Sj.
+          state' = (to_le mask ^ block) # (drop state)
+          mask = (take`{n % Nrb} sj # zero) : [Nrb][8]
+          sj = from_le (take state ^ block)
+          (state, block) = abs ! 0
+
+// Finalise.
+finalise : [Nw] -> State -> (State, Tag)
+finalise l s = (st, from_le (take st))
+    where st = F (2 * l) (tag_state s DomTag)
+
 private
   type Nw = NORXImpl::Nw
   type Nr = Nw * 12
@@ -101,15 +140,6 @@ private
             c'' = H c' d''
             b'' = (b' ^ c'') >>> NORXImpl::rot.3
 
-  // Initialise the internal state.
-  initialise : [Nw] -> Key -> Nonce -> State
-  initialise l k n = F l (ns # [u2, u3] # ks # [u8, u9, u10, u11] # ps)
-      where [u0, u1,  u2,  u3,  u4,  u5,  u6,  u7,
-             u8, u9, u10, u11, u12, u13, u14, u15] = F 2 [0..15]
-            ps = [u12 ^ `Nw, u13 ^ l, u14 ^ `Np, u15 ^ (`Nw * 4)]
-            ns = to_le n
-            ks = to_le k
-
   // Multi-rate padding.
   pad : {n, np}
       ( np == Nr - (n * 8) % Nr // number of padding bits
@@ -128,36 +158,6 @@ private
             ys = [(s, zero)] # [ next y (to_le b) | b <- blocks | (y,_) <- ys ]
             next y b = (f st b, take st ^ b)
                 where st = F l (tag_state y v)
-
-  // Absorb additional data.
-  absorb l s x v = state
-      where (state, block) = (absorb_data l s x v f) ! 0
-            f st bl = st ^ (bl # zero)
-
-  // Encrypt message.
-  encrypt : {n} (fin n) => [Nw] -> State -> [n][8] -> (State, [n][8])
-  encrypt l s x = (abs.0 ! 0, take ciphertext)
-      where abs = absorb_data l s x DomPayload f
-            ciphertext = from_le (join abs.1)
-            f st bl = st ^ (bl # zero)
-
-  // Decrypt message.
-  decrypt : {n} (fin n) => [Nw] -> State -> [n][8] -> (State, [n][8])
-  decrypt l s x = (state', take plaintext)
-      where abs = absorb_data l s x DomPayload f
-            plaintext = from_le (join abs.1)
-            f st bl = bl # (drop st)
-            // Fix the state returned by decrypt() so that the padding
-            // (if any) is properly XOR'ed with the last state Sj.
-            state' = (to_le mask ^ block) # (drop state)
-            mask = (take`{n % Nrb} sj # zero) : [Nrb][8]
-            sj = from_le (take state ^ block)
-            (state, block) = abs ! 0
-
-  // Finalise.
-  finalise : [Nw] -> State -> (State, Tag)
-  finalise l s = (st, from_le (take st))
-      where st = F (2 * l) (tag_state s DomTag)
 
 
 /* -------------------------------------------------------------------------- */

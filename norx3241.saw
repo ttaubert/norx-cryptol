@@ -1,0 +1,124 @@
+import "norx.cry";
+
+m <- llvm_load_module "norx3241.bc";
+
+print "NORX32-4-1: verify norx_init";
+time (llvm_verify m "norx_init" [] do {
+  llvm_ptr "state" (llvm_array 16 (llvm_int 32));
+  state <- llvm_var "*state" (llvm_array 16 (llvm_int 32));
+  llvm_ptr "k" (llvm_array 16 (llvm_int 8));
+  k <- llvm_var "*k" (llvm_array 16 (llvm_int 8));
+  llvm_ptr "n" (llvm_array 8 (llvm_int 8));
+  n <- llvm_var "*n" (llvm_array 8 (llvm_int 8));
+
+  // Check resulting state.
+  llvm_ensure_eq "*state" {{ initialise 4 k n : [16][32] }};
+
+  // Verify.
+  llvm_verify_tactic abc;
+});
+
+let check_absorb_data bytes tag = do {
+  llvm_ptr "state" (llvm_array 16 (llvm_int 32));
+  state <- llvm_var "*state" (llvm_array 16 (llvm_int 32));
+  llvm_ptr "in" (llvm_array bytes (llvm_int 8));
+  inp <- llvm_var "*in" (llvm_array bytes (llvm_int 8));
+  inlen <- llvm_var "inlen" (llvm_int 64);
+  tag <- llvm_var "tag" (llvm_int 32);
+
+  // Tag is fixed.
+  llvm_assert_eq "tag" {{ `tag : [32] }};
+
+  // Input is ${bytes} long.
+  llvm_assert_eq "inlen" {{ `bytes : [64] }};
+
+  // Check resulting state.
+  llvm_ensure_eq "*state" {{ absorb 4 state inp `tag : [16][32] }};
+
+  // Verify.
+  llvm_sat_branches true;
+  llvm_verify_tactic abc;
+};
+
+print "NORX32-4-1: verify norx_absorb_data w/ HEADER_TAG";
+time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 32 1));
+time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 48 1));
+time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 49 1));
+time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 96 1));
+
+print "NORX32-4-1: verify norx_absorb_data w/ PAYLOAD_TAG";
+time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 32 2));
+// Two tag values should be sufficient to ensure they're properly absorbed.
+
+let check_encrypt_data bytes = do {
+  llvm_ptr "state" (llvm_array 16 (llvm_int 32));
+  state <- llvm_var "*state" (llvm_array 16 (llvm_int 32));
+  llvm_ptr "out" (llvm_array bytes (llvm_int 8));
+  out <- llvm_var "*out" (llvm_array bytes (llvm_int 8));
+  llvm_ptr "in" (llvm_array bytes (llvm_int 8));
+  inp <- llvm_var "*in" (llvm_array bytes (llvm_int 8));
+  inlen <- llvm_var "inlen" (llvm_int 64);
+
+  // Input is ${bytes} long.
+  llvm_assert_eq "inlen" {{ `bytes : [64] }};
+
+  // Check resulting state and ciphertext.
+  let res = {{ encrypt 4 state inp }};
+  llvm_ensure_eq "*state" {{ res.0 : [16][32] }};
+  llvm_ensure_eq "*out" {{ res.1 : [_][8] }};
+
+  // Verify.
+  llvm_sat_branches true;
+  llvm_verify_tactic abc;
+};
+
+print "NORX32-4-1: verify norx_encrypt_data";
+time (llvm_verify m "norx_encrypt_data" [] (check_encrypt_data 32));
+time (llvm_verify m "norx_encrypt_data" [] (check_encrypt_data 48));
+time (llvm_verify m "norx_encrypt_data" [] (check_encrypt_data 49));
+time (llvm_verify m "norx_encrypt_data" [] (check_encrypt_data 96));
+
+let check_decrypt_data bytes = do {
+  llvm_ptr "state" (llvm_array 16 (llvm_int 32));
+  state <- llvm_var "*state" (llvm_array 16 (llvm_int 32));
+  llvm_ptr "out" (llvm_array bytes (llvm_int 8));
+  out <- llvm_var "*out" (llvm_array bytes (llvm_int 8));
+  llvm_ptr "in" (llvm_array bytes (llvm_int 8));
+  inp <- llvm_var "*in" (llvm_array bytes (llvm_int 8));
+  inlen <- llvm_var "inlen" (llvm_int 64);
+
+  // Input is ${bytes} long.
+  llvm_assert_eq "inlen" {{ `bytes : [64] }};
+
+  // Check resulting state and plaintext.
+  let res = {{ decrypt 4 state inp }};
+  llvm_ensure_eq "*state" {{ res.0 : [16][32] }};
+  llvm_ensure_eq "*out" {{ res.1 : [_][8] }};
+
+  // Verify.
+  llvm_sat_branches true;
+  llvm_verify_tactic abc;
+};
+
+print "NORX32-4-1: verify norx_decrypt_data";
+time (llvm_verify m "norx_decrypt_data" [] (check_decrypt_data 32));
+time (llvm_verify m "norx_decrypt_data" [] (check_decrypt_data 48));
+time (llvm_verify m "norx_decrypt_data" [] (check_decrypt_data 49));
+time (llvm_verify m "norx_decrypt_data" [] (check_decrypt_data 96));
+
+print "NORX32-4-1: verify norx_finalise";
+time (llvm_verify m "norx_finalise" [] do {
+  llvm_ptr "state" (llvm_array 16 (llvm_int 32));
+  state <- llvm_var "*state" (llvm_array 16 (llvm_int 32));
+  llvm_ptr "tag" (llvm_array 16 (llvm_int 8));
+  tag <- llvm_var "*tag" (llvm_array 16 (llvm_int 8));
+
+  // Check resulting state and tag.
+  let res = {{ finalise 4 state }};
+  llvm_ensure_eq "*state" {{ res.0 : [16][32] }};
+  llvm_ensure_eq "*tag" {{ res.1 : [16][8] }};
+
+  // Verify.
+  llvm_sat_branches true;
+  llvm_verify_tactic abc;
+});
