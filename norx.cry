@@ -1,5 +1,5 @@
 /*
- * NORX 2.0 Cryptol implementation by Tim Taubert <tim@timtaubert.de>.
+ * NORX 3.0 Cryptol implementation by Tim Taubert <tim@timtaubert.de>.
  *
  * The specification can be found at <https://norx.io/data/norx.pdf>.
  *
@@ -35,7 +35,7 @@ NORX6_Decrypt = NORX decrypt 6
 private
   NORX f l k n a m z = (ct, tag)
       where (st, ct) = f l (absorb l (initialise l k n) a DomHeader) m
-            (_, tag) = finalise l (absorb l st z DomTrailer)
+            (_, tag) = finalise l k (absorb l st z DomTrailer)
 
 
 /* -------------------------------------------------------------------------- */
@@ -43,7 +43,7 @@ private
 
 // Initialise the internal state.
 initialise : [Nw] -> Key -> Nonce -> State
-initialise l k n = F l (ns # [u2, u3] # ks # [u8, u9, u10, u11] # ps)
+initialise l k n = F l (ns # ks # [u8, u9, u10, u11] # ps) ^ (zero # ks)
     where [u0, u1,  u2,  u3,  u4,  u5,  u6,  u7,
            u8, u9, u10, u11, u12, u13, u14, u15] = F 2 [0..15]
           ps = [u12 ^ `Nw, u13 ^ l, u14 ^ `Np, u15 ^ (`Nw * 4)]
@@ -76,9 +76,10 @@ decrypt l s x = (state', take plaintext)
           (state, block) = abs ! 0
 
 // Finalise.
-finalise : [Nw] -> State -> (State, Tag)
-finalise l s = (st, from_le (take st))
-    where st = F (2 * l) (tag_state s DomTag)
+finalise : [Nw] -> Key -> State -> (State, Tag)
+finalise l k s = (st, from_le (drop st))
+    where st = F l (F l (tag_state s DomTag) ^ ks) ^ ks
+          ks = zero # to_le k
 
 private
   type Nw = NORXImpl::Nw
@@ -88,7 +89,7 @@ private
 
   type State = [16][Nw]
   type Key = [Nw / 2][8]
-  type Nonce = [Nw / 4][8]
+  type Nonce = [Nw / 2][8]
   type Tag = [Nw / 2][8]
   type Block = [Nr / Nw][Nw]
 
@@ -170,8 +171,8 @@ private
   property p_a1 = F 2 [0..15] == tests.vec_init_const
 
   // Test Vectors [A.2]
-  K = [0..(Nw/2-1)]
-  N = [ x << 4 | x <- reverse [(16-Nw/4)..15] ]
+  K = [0..Nw/2-1]
+  N = [ 32 + x | x <- K ]
   A = [0..127]
   M = [0..127]
   Z = [0..127]
@@ -181,7 +182,7 @@ private
   t_header = absorb 4 t_init A DomHeader
   (t_encrypt, t_ciphertext) = encrypt 4 t_header M
   t_trailer = absorb 4 t_encrypt Z DomTrailer
-  (t_final, t_tag) = finalise 4 t_trailer
+  (t_final, t_tag) = finalise 4 K t_trailer
   t_decrypt = decrypt 4 t_header t_ciphertext
 
   // Test Values (6 rounds).
@@ -189,7 +190,7 @@ private
   t_header' = absorb 6 t_init' A DomHeader
   (t_encrypt', t_ciphertext') = encrypt 6 t_header' M
   t_trailer' = absorb 6 t_encrypt' Z DomTrailer
-  (t_final', t_tag') = finalise 6 t_trailer'
+  (t_final', t_tag') = finalise 6 K t_trailer'
   t_decrypt' = decrypt 6 t_header' t_ciphertext'
 
   // State after initialisation.

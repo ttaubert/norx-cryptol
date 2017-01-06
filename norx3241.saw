@@ -8,8 +8,8 @@ time (llvm_verify m "norx_init" [] do {
   state <- llvm_var "*state" (llvm_array 16 (llvm_int 32));
   llvm_ptr "k" (llvm_array 16 (llvm_int 8));
   k <- llvm_var "*k" (llvm_array 16 (llvm_int 8));
-  llvm_ptr "n" (llvm_array 8 (llvm_int 8));
-  n <- llvm_var "*n" (llvm_array 8 (llvm_int 8));
+  llvm_ptr "n" (llvm_array 16 (llvm_int 8));
+  n <- llvm_var "*n" (llvm_array 16 (llvm_int 8));
 
   // Check resulting state.
   llvm_ensure_eq "*state" {{ initialise 4 k n : [16][32] }};
@@ -108,13 +108,15 @@ time (llvm_verify m "norx_decrypt_data" [] (check_decrypt_data 96));
 
 print "NORX32-4-1: verify norx_finalise";
 time (llvm_verify m "norx_finalise" [] do {
+  llvm_ptr "k" (llvm_array 16 (llvm_int 8));
+  k <- llvm_var "*k" (llvm_array 16 (llvm_int 8));
   llvm_ptr "state" (llvm_array 16 (llvm_int 32));
   state <- llvm_var "*state" (llvm_array 16 (llvm_int 32));
   llvm_ptr "tag" (llvm_array 16 (llvm_int 8));
   tag <- llvm_var "*tag" (llvm_array 16 (llvm_int 8));
 
   // Check resulting state and tag.
-  let res = {{ finalise 4 state }};
+  let res = {{ finalise 4 k state }};
   llvm_ensure_eq "*state" {{ res.0 : [16][32] }};
   llvm_ensure_eq "*tag" {{ res.1 : [16][8] }};
 

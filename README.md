@@ -1,8 +1,8 @@
-# Cryptol implementation of NORX v2.0
+# Cryptol implementation of NORX v3.0
 
 ## About
 
-This repository provides a Cryptol implementation of NORX v2.0,
+This repository provides a Cryptol implementation of NORX v3.0,
 written by [Tim Taubert](https://timtaubert.de/).
 
 The NORX AEAD algorithm family was designed by:
