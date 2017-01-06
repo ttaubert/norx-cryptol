@@ -22,7 +22,7 @@ $ cryptol
   / __| '__| | | | '_ \| __/ _ \| |
  | (__| |  | |_| | |_) | || (_) | |
   \___|_|   \__, | .__/ \__\___/|_|
-            |___/|_| version 2.4.0 (8b57782)
+            |___/|_| version 2.4.0 (054a3e2)
 
 Loading module Cryptol
 
@@ -85,42 +85,43 @@ Loading module Cryptol
 Loading file "norx3241.saw"
 Loading module NORX32Impl
 Loading module NORX
+
 NORX32-4-1: verify norx_init
 Successfully verified @norx_init
-Time: 1.516162s
+Time: 1.598852s
 NORX32-4-1: verify norx_absorb_data w/ HEADER_TAG
 Successfully verified @norx_absorb_data
-Time: 1.31913s
+Time: 0.850784s
 Successfully verified @norx_absorb_data
-Time: 2.846994s
+Time: 1.987303s
 Successfully verified @norx_absorb_data
-Time: 2.959763s
+Time: 1.787513s
 Successfully verified @norx_absorb_data
-Time: 4.40466s
+Time: 2.713933s
 NORX32-4-1: verify norx_absorb_data w/ PAYLOAD_TAG
 Successfully verified @norx_absorb_data
-Time: 1.383441s
+Time: 0.826111s
 NORX32-4-1: verify norx_encrypt_data
 Successfully verified @norx_encrypt_data
-Time: 1.834217s
+Time: 1.030005s
 Successfully verified @norx_encrypt_data
-Time: 3.449269s
+Time: 2.517124s
 Successfully verified @norx_encrypt_data
-Time: 3.340121s
+Time: 2.614919s
 Successfully verified @norx_encrypt_data
-Time: 5.287682s
+Time: 2.97911s
 NORX32-4-1: verify norx_decrypt_data
 Successfully verified @norx_decrypt_data
-Time: 33.732335s
+Time: 1.272066s
 Successfully verified @norx_decrypt_data
-Time: 64.050452s
+Time: 1.924973s
 Successfully verified @norx_decrypt_data
-Time: 65.218696s
+Time: 2.377338s
 Successfully verified @norx_decrypt_data
-Time: 93.77139s
+Time: 3.076733s
 NORX32-4-1: verify norx_finalise
 Successfully verified @norx_finalise
-Time: 2.141832s
+Time: 2.069437s
 ```
 
 ## License
