@@ -18,7 +18,7 @@ time (llvm_verify m "norx_init" [] do {
   llvm_verify_tactic abc;
 });
 
-let check_absorb_data bytes tag = do {
+let check_absorb_data bytes = do {
   llvm_ptr "state" (llvm_array 16 (llvm_int 32));
   state <- llvm_var "*state" (llvm_array 16 (llvm_int 32));
   llvm_ptr "in" (llvm_array bytes (llvm_int 8));
@@ -26,29 +26,22 @@ let check_absorb_data bytes tag = do {
   inlen <- llvm_var "inlen" (llvm_int 64);
   tag <- llvm_var "tag" (llvm_int 32);
 
-  // Tag is fixed.
-  llvm_assert_eq "tag" {{ `tag : [32] }};
-
   // Input is ${bytes} long.
   llvm_assert_eq "inlen" {{ `bytes : [64] }};
 
   // Check resulting state.
-  llvm_ensure_eq "*state" {{ absorb 4 state inp `tag : [16][32] }};
+  llvm_ensure_eq "*state" {{ absorb 4 state inp tag : [16][32] }};
 
   // Verify.
   llvm_sat_branches true;
   llvm_verify_tactic abc;
 };
 
-print "NORX32-4-1: verify norx_absorb_data w/ HEADER_TAG";
-time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 32 1));
-time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 48 1));
-time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 49 1));
-time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 96 1));
-
-print "NORX32-4-1: verify norx_absorb_data w/ PAYLOAD_TAG";
-time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 32 2));
-// Two tag values should be sufficient to ensure they're properly absorbed.
+print "NORX32-4-1: verify norx_absorb_data";
+time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 32));
+time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 48));
+time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 49));
+time (llvm_verify m "norx_absorb_data" [] (check_absorb_data 96));
 
 let check_encrypt_data bytes = do {
   llvm_ptr "state" (llvm_array 16 (llvm_int 32));
