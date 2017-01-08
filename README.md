@@ -88,40 +88,37 @@ Loading module NORX
 
 NORX32-4-1: verify norx_init
 Successfully verified @norx_init
-Time: 1.598852s
-NORX32-4-1: verify norx_absorb_data w/ HEADER_TAG
+Time: 1.357883s
+NORX32-4-1: verify norx_absorb_data
 Successfully verified @norx_absorb_data
-Time: 0.850784s
+Time: 0.908516s
 Successfully verified @norx_absorb_data
-Time: 1.987303s
+Time: 1.958074s
 Successfully verified @norx_absorb_data
-Time: 1.787513s
+Time: 1.709996s
 Successfully verified @norx_absorb_data
-Time: 2.713933s
-NORX32-4-1: verify norx_absorb_data w/ PAYLOAD_TAG
-Successfully verified @norx_absorb_data
-Time: 0.826111s
+Time: 3.149763s
 NORX32-4-1: verify norx_encrypt_data
 Successfully verified @norx_encrypt_data
-Time: 1.030005s
+Time: 1.198334s
 Successfully verified @norx_encrypt_data
-Time: 2.517124s
+Time: 2.307122s
 Successfully verified @norx_encrypt_data
-Time: 2.614919s
+Time: 2.062518s
 Successfully verified @norx_encrypt_data
-Time: 2.97911s
+Time: 3.259155s
 NORX32-4-1: verify norx_decrypt_data
 Successfully verified @norx_decrypt_data
-Time: 1.272066s
+Time: 1.27186s
 Successfully verified @norx_decrypt_data
-Time: 1.924973s
+Time: 2.128108s
 Successfully verified @norx_decrypt_data
-Time: 2.377338s
+Time: 2.348125s
 Successfully verified @norx_decrypt_data
-Time: 3.076733s
+Time: 3.474382s
 NORX32-4-1: verify norx_finalise
 Successfully verified @norx_finalise
-Time: 2.069437s
+Time: 2.020188s
 ```
 
 ## License
